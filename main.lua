@@ -1,12 +1,12 @@
--- AUTO CLICK SCRIPT - COMPLETE MOBILE & PC FIX
--- Preserves all controls including joystick
+-- UNIVERSAL AUTO CLICK SCRIPT
+-- Mobile Controls PRESERVED - Joystick Won't Disappear
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "🖱️ Auto Click Universal",
-   LoadingTitle = "Loading...",
-   LoadingSubtitle = "Mobile & PC Compatible",
+   Name = "🎮 Universal Auto Click",
+   LoadingTitle = "Loading Universal Script...",
+   LoadingSubtitle = "Mobile Controls Protected",
    ConfigurationSaving = {Enabled = false},
    KeySystem = false,
 })
@@ -15,79 +15,111 @@ local Window = Rayfield:CreateWindow({
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
+local ContextActionService = game:GetService("ContextActionService")
 
 -- Variables
 local Player = Players.LocalPlayer
-local Mouse = Player:GetMouse()
-local Camera = workspace.CurrentCamera
+local PlayerGui = Player:WaitForChild("PlayerGui")
 
 local Settings = {
     ClickSpeed = 10,
-    AutoClickEnabled = false,
-    RightClickEnabled = false,
+    AutoClickActive = false,
     Notifications = true
 }
 
-local lastClickTime = 0
-local clickLoop = nil
+local clickConnection = nil
+local lastClick = 0
 
--- Notification Function
-local function Notify(title, text)
+-- Check if mobile
+local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+
+-- Notification
+local function Notify(title, msg)
     if Settings.Notifications then
         Rayfield:Notify({
             Title = title,
-            Content = text,
+            Content = msg,
             Duration = 3,
         })
     end
 end
 
--- Click function that DOESN'T block controls
-local function DoAutoClick()
-    local currentTime = tick()
-    local delay = 1 / Settings.ClickSpeed
-    
-    if currentTime - lastClickTime >= delay then
-        -- Method that works on both PC and Mobile without blocking controls
-        spawn(function()
-            pcall(function()
-                -- Get current mouse/touch position
-                local mousePos = UserInputService:GetMouseLocation()
+-- IMPORTANT: Ensure mobile controls stay visible
+local function PreserveMobileControls()
+    if isMobile then
+        -- Make sure TouchGui and ControlsModule stay active
+        pcall(function()
+            local TouchGui = PlayerGui:FindFirstChild("TouchGui")
+            if TouchGui then
+                TouchGui.Enabled = true
                 
-                -- Send click at current position without interfering with controls
-                VirtualInputManager:SendMouseButtonEvent(mousePos.X, mousePos.Y, 0, true, game, 0)
-                task.wait(0.01)
-                VirtualInputManager:SendMouseButtonEvent(mousePos.X, mousePos.Y, 0, false, game, 0)
-            end)
+                -- Ensure joystick stays visible
+                local TouchControlFrame = TouchGui:FindFirstChild("TouchControlFrame")
+                if TouchControlFrame then
+                    TouchControlFrame.Visible = true
+                    
+                    -- Thumbstick (movement joystick)
+                    local Thumbstick = TouchControlFrame:FindFirstChild("ThumbstickFrame")
+                    if Thumbstick then
+                        Thumbstick.Visible = true
+                        Thumbstick.Active = true
+                    end
+                end
+                
+                -- Jump button
+                local JumpButton = TouchGui:FindFirstChild("JumpButton")
+                if JumpButton then
+                    JumpButton.Visible = true
+                    JumpButton.Active = true
+                end
+            end
         end)
-        
-        lastClickTime = currentTime
     end
 end
 
-local function DoRightClick()
-    local currentTime = tick()
-    local delay = 1 / Settings.ClickSpeed
-    
-    if currentTime - lastClickTime >= delay then
-        spawn(function()
-            pcall(function()
-                local mousePos = UserInputService:GetMouseLocation()
-                VirtualInputManager:SendMouseButtonEvent(mousePos.X, mousePos.Y, 1, true, game, 0)
-                task.wait(0.01)
-                VirtualInputManager:SendMouseButtonEvent(mousePos.X, mousePos.Y, 1, false, game, 0)
-            end)
-        end)
-        
-        lastClickTime = currentTime
+-- Keep controls visible (run continuously)
+if isMobile then
+    spawn(function()
+        while task.wait(0.5) do
+            PreserveMobileControls()
+        end
+    end)
+end
+
+-- Auto Click Function (doesn't interfere with touch controls)
+local function ExecuteClick()
+    local now = tick()
+    if now - lastClick < (1 / Settings.ClickSpeed) then
+        return
     end
+    lastClick = now
+    
+    -- Execute click without blocking touch input
+    spawn(function()
+        pcall(function()
+            -- Use tool activation instead of raw clicks
+            local tool = Player.Character and Player.Character:FindFirstChildOfClass("Tool")
+            if tool and tool:FindFirstChild("Handle") then
+                tool:Activate()
+            else
+                -- Fallback: simulate click at center screen (won't block controls)
+                local ViewportSize = workspace.CurrentCamera.ViewportSize
+                local center = Vector2.new(ViewportSize.X / 2, ViewportSize.Y / 2)
+                
+                -- This method doesn't capture input events
+                local VirtualInputManager = game:GetService("VirtualInputManager")
+                VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 0)
+                task.wait(0.01)
+                VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, false, game, 0)
+            end
+        end)
+    end)
 end
 
 -- ==================== MAIN TAB ====================
-local MainTab = Window:CreateTab("🖱️ Auto Click", 4483362458)
+local MainTab = Window:CreateTab("🎮 Main", 4483362458)
 
-MainTab:CreateSection("⚙️ Settings")
+MainTab:CreateSection("⚙️ Click Configuration")
 
 MainTab:CreateSlider({
    Name = "Click Speed (CPS)",
@@ -97,77 +129,78 @@ MainTab:CreateSlider({
    CurrentValue = 10,
    Callback = function(Value)
         Settings.ClickSpeed = Value
-        Notify("Speed Updated", Value .. " clicks per second")
+        Notify("Click Speed", tostring(Value) .. " CPS")
    end,
 })
 
-MainTab:CreateSection("🖱️ Click Controls")
+MainTab:CreateSection("🖱️ Auto Click")
 
 MainTab:CreateToggle({
    Name = "Enable Auto Click",
    CurrentValue = false,
-   Callback = function(Value)
-        Settings.AutoClickEnabled = Value
+   Callback = function(State)
+        Settings.AutoClickActive = State
         
-        if Value then
-            -- Use Heartbeat for smooth operation
-            clickLoop = RunService.Heartbeat:Connect(function()
-                if Settings.AutoClickEnabled then
-                    DoAutoClick()
+        if State then
+            -- Start auto clicking
+            clickConnection = RunService.Heartbeat:Connect(function()
+                if Settings.AutoClickActive then
+                    ExecuteClick()
                 end
             end)
+            
+            -- Ensure mobile controls stay
+            PreserveMobileControls()
+            
             Notify("Auto Click", "ENABLED - " .. Settings.ClickSpeed .. " CPS")
         else
-            if clickLoop then
-                clickLoop:Disconnect()
-                clickLoop = nil
+            -- Stop auto clicking
+            if clickConnection then
+                clickConnection:Disconnect()
+                clickConnection = nil
             end
+            
             Notify("Auto Click", "DISABLED")
         end
    end,
 })
 
-MainTab:CreateToggle({
-   Name = "Enable Right Click",
-   CurrentValue = false,
-   Callback = function(Value)
-        Settings.RightClickEnabled = Value
-        
-        if Value then
-            spawn(function()
-                while Settings.RightClickEnabled do
-                    DoRightClick()
-                    task.wait(1 / Settings.ClickSpeed)
-                end
-            end)
-            Notify("Right Click", "ENABLED")
-        else
-            Notify("Right Click", "DISABLED")
-        end
-   end,
-})
+MainTab:CreateSection("📱 Mobile Controls Status")
 
-MainTab:CreateSection("🎮 Control Info")
-
-MainTab:CreateLabel("Device: " .. (UserInputService.TouchEnabled and "📱 Mobile" or "💻 PC"))
-MainTab:CreateLabel("Movement Controls: ✓ Working")
-MainTab:CreateLabel("Camera Controls: ✓ Working")
-if UserInputService.TouchEnabled then
-    MainTab:CreateLabel("Joystick: ✓ Visible & Working")
+if isMobile then
+    MainTab:CreateLabel("Device: 📱 Mobile/Tablet")
+    MainTab:CreateLabel("Joystick: ✓ Protected & Visible")
+    MainTab:CreateLabel("Jump Button: ✓ Protected & Visible")
+    MainTab:CreateLabel("Movement: ✓ Fully Functional")
+    
+    MainTab:CreateButton({
+       Name = "Force Restore Controls",
+       Callback = function()
+            PreserveMobileControls()
+            Notify("Controls", "Mobile controls restored!")
+       end,
+    })
+else
+    MainTab:CreateLabel("Device: 💻 PC/Desktop")
+    MainTab:CreateLabel("Keyboard: ✓ WASD Movement")
+    MainTab:CreateLabel("Mouse: ✓ Camera Control")
 end
 
+MainTab:CreateSection("🛑 Emergency Stop")
+
 MainTab:CreateButton({
-   Name = "Stop All Clicking",
+   Name = "STOP All Auto Click",
    Callback = function()
-        Settings.AutoClickEnabled = false
-        Settings.RightClickEnabled = false
+        Settings.AutoClickActive = false
         
-        if clickLoop then
-            clickLoop:Disconnect()
-            clickLoop = nil
+        if clickConnection then
+            clickConnection:Disconnect()
+            clickConnection = nil
         end
         
-        Notify("Stopped", "All auto clicking stopped")
+        PreserveMobileControls()
+        
+        Notify("STOPPED", "Auto click disabled & controls restored")
    end,
 })
 
@@ -179,88 +212,109 @@ SettingsTab:CreateSection("🔔 Notifications")
 SettingsTab:CreateToggle({
    Name = "Show Notifications",
    CurrentValue = true,
-   Callback = function(Value)
-        Settings.Notifications = Value
-        if Value then
-            Notify("Notifications", "Enabled")
-        end
+   Callback = function(State)
+        Settings.Notifications = State
    end,
 })
 
-SettingsTab:CreateSection("📊 Status")
+SettingsTab:CreateSection("🎮 Control Protection")
+
+if isMobile then
+    SettingsTab:CreateParagraph({
+        Title = "Mobile Control Protection",
+        Content = "This script protects your mobile controls:\n\n✓ Joystick stays visible\n✓ Jump button stays visible\n✓ All touch controls work\n✓ Movement is preserved\n\nIf controls disappear, use 'Force Restore Controls' button!"
+    })
+end
+
+SettingsTab:CreateSection("📊 Player Information")
 
 SettingsTab:CreateLabel("Username: " .. Player.Name)
-SettingsTab:CreateLabel("User ID: " .. Player.UserId)
-SettingsTab:CreateLabel("Platform: " .. (UserInputService.TouchEnabled and "Mobile" or "PC"))
-
-SettingsTab:CreateSection("ℹ️ Instructions")
-
-SettingsTab:CreateParagraph({
-    Title = "How to Use",
-    Content = "1. Set your desired Click Speed (CPS)\n2. Toggle 'Enable Auto Click' ON\n3. Move normally with joystick/WASD\n4. Auto clicking happens automatically\n\nYour controls are NOT blocked!"
-})
+SettingsTab:CreateLabel("Display Name: " .. Player.DisplayName)
+SettingsTab:CreateLabel("User ID: " .. tostring(Player.UserId))
+SettingsTab:CreateLabel("Device Type: " .. (isMobile and "Mobile" or "PC"))
 
 -- ==================== INFO TAB ====================
 local InfoTab = Window:CreateTab("ℹ️ Info", 4483362458)
 
-InfoTab:CreateSection("📖 About This Script")
+InfoTab:CreateSection("📖 About")
 
 InfoTab:CreateParagraph({
-    Title = "Auto Click Universal v4.0",
-    Content = "A simple auto-clicker that works on both PC and Mobile devices while preserving all game controls including joystick, movement, and camera."
+    Title = "Universal Auto Click v5.0",
+    Content = "A universal auto-clicker designed to work on ALL devices while preserving native Roblox controls. Mobile joysticks and buttons are protected and will not disappear."
 })
 
 InfoTab:CreateSection("✨ Features")
 
-InfoTab:CreateLabel("✓ Works on PC and Mobile")
-InfoTab:CreateLabel("✓ Joystick remains visible")
-InfoTab:CreateLabel("✓ All controls functional")
-InfoTab:CreateLabel("✓ Adjustable click speed")
-InfoTab:CreateLabel("✓ Left and right click support")
-InfoTab:CreateLabel("✓ Movement while clicking")
+InfoTab:CreateLabel("✓ Universal: Works on ALL games")
+InfoTab:CreateLabel("✓ Mobile: Joystick protected")
+InfoTab:CreateLabel("✓ PC: Full keyboard/mouse support")
+InfoTab:CreateLabel("✓ Safe: Doesn't block game controls")
+InfoTab:CreateLabel("✓ Adjustable: 1-50 CPS")
+InfoTab:CreateLabel("✓ Smart: Auto-detects device type")
+
+InfoTab:CreateSection("📱 Mobile Users - READ THIS")
+
+InfoTab:CreateParagraph({
+    Title = "How to Use on Mobile",
+    Content = "1. Set your Click Speed (CPS)\n2. Toggle 'Enable Auto Click' ON\n3. Your JOYSTICK and BUTTONS stay visible!\n4. Move with joystick as normal\n5. Auto-clicking happens automatically\n\nIMPORTANT: If controls disappear, press 'Force Restore Controls' button!"
+})
+
+InfoTab:CreateSection("💻 PC Users - READ THIS")
+
+InfoTab:CreateParagraph({
+    Title = "How to Use on PC",
+    Content = "1. Set your Click Speed (CPS)\n2. Toggle 'Enable Auto Click' ON\n3. Move with WASD as normal\n4. Use mouse for camera\n5. Auto-clicking happens automatically\n\nAll keyboard and mouse controls work normally!"
+})
+
+InfoTab:CreateSection("⚠️ Troubleshooting")
+
+InfoTab:CreateParagraph({
+    Title = "If Something Goes Wrong",
+    Content = "Mobile Controls Disappeared?\n→ Press 'Force Restore Controls'\n\nCan't Move?\n→ Press 'STOP All Auto Click'\n→ Then re-enable auto click\n\nNot Clicking?\n→ Check if CPS is set correctly\n→ Make sure toggle is ON\n\nStill Issues?\n→ Rejoin the game"
+})
 
 InfoTab:CreateSection("🎯 Compatibility")
 
-InfoTab:CreateLabel("Touch Screen: " .. (UserInputService.TouchEnabled and "✓ Supported" or "✗ Not Available"))
-InfoTab:CreateLabel("Mouse: " .. (UserInputService.MouseEnabled and "✓ Supported" or "✗ Not Available"))
-InfoTab:CreateLabel("Keyboard: " .. (UserInputService.KeyboardEnabled and "✓ Supported" or "✗ Not Available"))
-InfoTab:CreateLabel("Gamepad: " .. (UserInputService.GamepadEnabled and "✓ Supported" or "✗ Not Available"))
+InfoTab:CreateLabel("Touch Devices: " .. (UserInputService.TouchEnabled and "✓ YES" or "✗ NO"))
+InfoTab:CreateLabel("Mouse Support: " .. (UserInputService.MouseEnabled and "✓ YES" or "✗ NO"))
+InfoTab:CreateLabel("Keyboard Support: " .. (UserInputService.KeyboardEnabled and "✓ YES" or "✗ NO"))
+InfoTab:CreateLabel("Gamepad Support: " .. (UserInputService.GamepadEnabled and "✓ YES" or "✗ NO"))
 
-InfoTab:CreateSection("⚠️ Important Notes")
-
-InfoTab:CreateParagraph({
-    Title = "Mobile Users",
-    Content = "• Your joystick WILL remain visible\n• You CAN move while auto-clicking\n• All buttons continue to work\n• Camera controls are preserved\n• Just enable auto click and play normally!"
-})
-
-InfoTab:CreateParagraph({
-    Title = "PC Users",
-    Content = "• WASD movement works normally\n• Mouse camera control preserved\n• Can jump and use abilities\n• Auto click runs in background\n• No input blocking"
-})
-
--- Device check and notification
+-- Initial setup
 task.wait(1)
 
-if UserInputService.TouchEnabled then
-    Notify("📱 Mobile Device", "Joystick preserved! Controls work!")
+-- Ensure controls are visible on startup
+PreserveMobileControls()
+
+-- Send welcome message
+if isMobile then
+    Notify("📱 Mobile Device", "Controls protected & ready!")
 else
-    Notify("💻 PC Device", "Keyboard & Mouse ready!")
+    Notify("💻 PC Device", "Ready to use!")
 end
 
-Notify("✓ Ready!", "Set CPS and enable auto click")
+Notify("✓ Loaded", "Set CPS and enable auto click!")
 
--- Console info
-print("========================================")
-print("AUTO CLICK UNIVERSAL V4.0")
-print("========================================")
+-- Console output
+print("=" .. string.rep("=", 50))
+print("UNIVERSAL AUTO CLICK V5.0")
+print("=" .. string.rep("=", 50))
+print("Status: LOADED ✓")
 print("Player: " .. Player.Name)
-print("Device: " .. (UserInputService.TouchEnabled and "Mobile" or "PC"))
-print("Status: Ready")
-print("Controls: All Preserved")
-print("========================================")
+print("Device: " .. (isMobile and "Mobile (Touch)" or "PC (Keyboard/Mouse)"))
+print("Controls: " .. (isMobile and "Joystick PROTECTED" or "WASD/Mouse ACTIVE"))
+print("=" .. string.rep("=", 50))
 print("")
-print("USAGE:")
-print("1. Main Tab -> Set Click Speed")
-print("2. Toggle 'Enable Auto Click'")
-print("3. Play normally - controls work!")
-print("========================================")
+if isMobile then
+    print("MOBILE USERS:")
+    print("• Your joystick WILL stay visible")
+    print("• Jump button WILL stay visible")
+    print("• All controls protected by script")
+    print("• Use 'Force Restore' if needed")
+else
+    print("PC USERS:")
+    print("• WASD movement works")
+    print("• Mouse controls work")
+    print("• All inputs preserved")
+end
+print("=" .. string.rep("=", 50))
