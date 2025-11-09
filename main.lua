@@ -31,6 +31,12 @@ local autoClickEnabled = false
 local clickSpeed = 10
 local clickConnection = nil
 local lastClick = 0
+local clickPosX = 100  -- 右からの距離
+local clickPosY = 200  -- 下からの距離
+
+-- Click marker variables
+local markerEnabled = true
+local markerGui = nil
 
 -- Follow variables
 local followEnabled = false
@@ -53,6 +59,102 @@ local function Notify(title, content)
     })
 end
 
+-- Create click position marker
+local function createMarker()
+    pcall(function()
+        if markerGui then
+            markerGui:Destroy()
+        end
+    end)
+    
+    local success, err = pcall(function()
+        local playerGui = player:WaitForChild("PlayerGui")
+        markerGui = Instance.new("ScreenGui")
+        markerGui.Name = "ClickMarkerGUI"
+        markerGui.ResetOnSpawn = false
+        markerGui.IgnoreGuiInset = true
+        markerGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        
+        -- 縦線
+        local verticalLine = Instance.new("Frame")
+        verticalLine.Name = "VerticalLine"
+        verticalLine.Size = UDim2.new(0, 3, 0, 50)
+        verticalLine.Position = UDim2.new(1, -clickPosX, 1, -clickPosY)
+        verticalLine.AnchorPoint = Vector2.new(0.5, 0.5)
+        verticalLine.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        verticalLine.BorderSizePixel = 0
+        verticalLine.ZIndex = 9999
+        verticalLine.Parent = markerGui
+        
+        -- 横線
+        local horizontalLine = Instance.new("Frame")
+        horizontalLine.Name = "HorizontalLine"
+        horizontalLine.Size = UDim2.new(0, 50, 0, 3)
+        horizontalLine.Position = UDim2.new(1, -clickPosX, 1, -clickPosY)
+        horizontalLine.AnchorPoint = Vector2.new(0.5, 0.5)
+        horizontalLine.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        horizontalLine.BorderSizePixel = 0
+        horizontalLine.ZIndex = 9999
+        horizontalLine.Parent = markerGui
+        
+        -- 中心の点
+        local centerDot = Instance.new("Frame")
+        centerDot.Name = "CenterDot"
+        centerDot.Size = UDim2.new(0, 8, 0, 8)
+        centerDot.Position = UDim2.new(1, -clickPosX, 1, -clickPosY)
+        centerDot.AnchorPoint = Vector2.new(0.5, 0.5)
+        centerDot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        centerDot.BorderSizePixel = 0
+        centerDot.ZIndex = 10000
+        centerDot.Parent = markerGui
+        
+        -- UICorner for center dot
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = centerDot
+        
+        markerGui.Enabled = markerEnabled
+        markerGui.Parent = playerGui
+        
+        print("✓ Marker created successfully at X:" .. clickPosX .. " Y:" .. clickPosY)
+    end)
+    
+    if not success then
+        warn("Failed to create marker:", err)
+    end
+end
+
+-- Update marker position
+local function updateMarkerPosition()
+    pcall(function()
+        if markerGui then
+            for _, child in pairs(markerGui:GetChildren()) do
+                if child:IsA("Frame") then
+                    if child.Name == "VerticalLine" then
+                        child.Position = UDim2.new(1, -clickPosX, 1, -clickPosY)
+                    elseif child.Name == "HorizontalLine" then
+                        child.Position = UDim2.new(1, -clickPosX, 1, -clickPosY)
+                    elseif child.Name == "CenterDot" then
+                        child.Position = UDim2.new(1, -clickPosX, 1, -clickPosY)
+                    end
+                end
+            end
+            print("✓ Marker position updated: X:" .. clickPosX .. " Y:" .. clickPosY)
+        end
+    end)
+end
+
+-- Toggle marker visibility
+local function toggleMarker(visible)
+    markerEnabled = visible
+    pcall(function()
+        if markerGui then
+            markerGui.Enabled = visible
+            print(visible and "✓ Marker shown" or "✓ Marker hidden")
+        end
+    end)
+end
+
 -- Auto Click Function
 local function ExecuteClick()
     local now = tick()
@@ -70,14 +172,14 @@ local function ExecuteClick()
                 local VirtualInputManager = game:GetService("VirtualInputManager")
                 local ViewportSize = Camera.ViewportSize
                 
-                -- ジャンプボタンの上（画面右下から少し上）
-                local clickX = ViewportSize.X - 100  -- 右から100px
-                local clickY = ViewportSize.Y - 200  -- 下から200px（ジャンプボタンの上）
+                -- 設定された位置をクリック
+                local clickX = ViewportSize.X - clickPosX
+                local clickY = ViewportSize.Y - clickPosY
                 
                 -- タッチイベントを送信
-                VirtualInputManager:SendTouchEvent(0, clickX, clickY)  -- タッチ開始
+                VirtualInputManager:SendTouchEvent(0, clickX, clickY)
                 task.wait(0.01)
-                VirtualInputManager:SendTouchEvent(1, clickX, clickY)  -- タッチ終了
+                VirtualInputManager:SendTouchEvent(1, clickX, clickY)
             end
         end)
     end)
@@ -95,15 +197,13 @@ local function getPlayerList()
     return names
 end
 
--- Follow function (参考2のコードを使用)
+-- Follow function
 local function startFollowing(targetName)
-    -- 既存の接続を切断
     if followConnection then
         followConnection:Disconnect()
         followConnection = nil
     end
     
-    -- プレイヤーを検索
     targetPlayer = Players:FindFirstChild(targetName)
     
     if not targetPlayer then
@@ -114,7 +214,6 @@ local function startFollowing(targetName)
     
     Notify("✓ Follow Started", "Following " .. targetName)
     
-    -- 尾行ループ (参考2の実装)
     followConnection = RunService.Heartbeat:Connect(function()
         if not followEnabled then
             if followConnection then
@@ -124,7 +223,6 @@ local function startFollowing(targetName)
             return
         end
         
-        -- ターゲットプレイヤーのキャラクターを取得
         if targetPlayer and targetPlayer.Character then
             local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
             character = player.Character
@@ -132,13 +230,10 @@ local function startFollowing(targetName)
             if targetHRP and character and character:FindFirstChild("HumanoidRootPart") then
                 humanoidRootPart = character.HumanoidRootPart
                 local targetPos = targetHRP.Position
-                
-                -- ターゲットの後ろに位置する
                 local targetLook = targetHRP.CFrame.LookVector
                 humanoidRootPart.CFrame = CFrame.new(targetPos - targetLook * followDistance, targetPos)
             end
         else
-            -- ターゲットが存在しない場合
             followEnabled = false
             Notify("Follow Ended", targetName .. " left the game")
         end
@@ -157,7 +252,7 @@ local function stopFollowing()
     Notify("Follow Stopped", "Follow disabled")
 end
 
--- Aimbot function (参考1のコードを使用)
+-- Aimbot function
 local function startAimbot()
     if aimbotConnection then
         aimbotConnection:Disconnect()
@@ -166,7 +261,6 @@ local function startAimbot()
     
     Notify("✓ Aimbot Started", "Locking onto nearest player")
     
-    -- Aimbot ループ (参考1の実装)
     aimbotConnection = RunService.RenderStepped:Connect(function()
         if not aimbotEnabled then
             if aimbotConnection then
@@ -179,7 +273,6 @@ local function startAimbot()
         local nearest = nil
         local shortestDist = math.huge
         
-        -- 最も近いプレイヤーを検索
         for _, plr in pairs(Players:GetPlayers()) do
             if plr ~= player and plr.Character and plr.Character:FindFirstChild("Head") then
                 local dist = (plr.Character.Head.Position - Camera.CFrame.Position).Magnitude
@@ -190,7 +283,6 @@ local function startAimbot()
             end
         end
         
-        -- カメラを頭に向ける
         if nearest and nearest.Character and nearest.Character:FindFirstChild("Head") then
             Camera.CFrame = CFrame.new(Camera.CFrame.Position, nearest.Character.Head.Position)
         end
@@ -220,16 +312,20 @@ Players.PlayerRemoving:Connect(function(removedPlayer)
     end
 end)
 
+-- Initialize marker after a short delay
+task.wait(1)
+createMarker()
+
 -- ==================== AUTO CLICK TAB ====================
 local ClickTab = Window:CreateTab("🖱️ Auto Click", 4483362458)
 
 ClickTab:CreateSection("⚙️ Click Configuration")
 
 if isMobile then
-    ClickTab:CreateLabel("📱 Mobile Mode: Clicking above jump button")
+    ClickTab:CreateLabel("📱 Mobile Mode: Custom click position")
     ClickTab:CreateLabel("✓ You can walk while auto-clicking!")
 else
-    ClickTab:CreateLabel("💻 PC Mode: Clicking at screen center")
+    ClickTab:CreateLabel("💻 PC Mode: Custom click position")
 end
 
 ClickTab:CreateSlider({
@@ -243,6 +339,54 @@ ClickTab:CreateSlider({
         Notify("Click Speed", tostring(Value) .. " CPS")
    end,
 })
+
+ClickTab:CreateSection("📍 Click Position Adjustment")
+
+ClickTab:CreateLabel("Adjust the red cross marker position")
+
+ClickTab:CreateSlider({
+   Name = "Horizontal (from right edge)",
+   Range = {50, 500},
+   Increment = 10,
+   Suffix = " px",
+   CurrentValue = 100,
+   Callback = function(Value)
+        clickPosX = Value
+        updateMarkerPosition()
+   end,
+})
+
+ClickTab:CreateSlider({
+   Name = "Vertical (from bottom edge)",
+   Range = {50, 500},
+   Increment = 10,
+   Suffix = " px",
+   CurrentValue = 200,
+   Callback = function(Value)
+        clickPosY = Value
+        updateMarkerPosition()
+   end,
+})
+
+ClickTab:CreateToggle({
+   Name = "🎯 Show Red Cross Marker",
+   CurrentValue = true,
+   Callback = function(State)
+        toggleMarker(State)
+   end,
+})
+
+ClickTab:CreateButton({
+   Name = "Reset Marker Position",
+   Callback = function()
+        clickPosX = 100
+        clickPosY = 200
+        updateMarkerPosition()
+        Notify("Reset", "Position reset to default")
+   end,
+})
+
+ClickTab:CreateSection("🎯 Auto Click Control")
 
 ClickTab:CreateToggle({
    Name = "Enable Auto Click",
@@ -340,7 +484,6 @@ FollowTab:CreateButton({
    end,
 })
 
--- Create quick select buttons
 local QuickSection = FollowTab:CreateSection("⚡ Quick Select")
 
 local function createPlayerButtons()
@@ -426,12 +569,11 @@ SettingsTab:CreateButton({
       print("========== CURRENT STATUS ==========")
       print("Auto Click Enabled:", autoClickEnabled)
       print("Click Speed:", clickSpeed, "CPS")
+      print("Click Position: X=" .. clickPosX .. " Y=" .. clickPosY)
+      print("Marker Visible:", markerEnabled)
       print("Target Player:", targetPlayerName ~= "" and targetPlayerName or "NONE")
       print("Follow Enabled:", followEnabled)
       print("Aimbot Enabled:", aimbotEnabled)
-      print("Click Connection:", clickConnection and "Active" or "Inactive")
-      print("Follow Connection:", followConnection and "Active" or "Inactive")
-      print("Aimbot Connection:", aimbotConnection and "Active" or "Inactive")
       print("===================================")
       Notify("Status", "Check console (F9)")
    end,
@@ -450,13 +592,15 @@ local InfoTab = Window:CreateTab("ℹ️ Info", 4483362458)
 InfoTab:CreateSection("📖 About")
 
 InfoTab:CreateParagraph({
-    Title = "Follow & Aimbot Script v1.0",
-    Content = "A simple script with three powerful features: Auto Click, Follow players from behind, and lock your camera onto the nearest player's head."
+    Title = "Follow & Aimbot Script v1.1",
+    Content = "A simple script with three powerful features: Auto Click with adjustable position marker, Follow players from behind, and lock your camera onto the nearest player's head."
 })
 
 InfoTab:CreateSection("✨ Features")
 
 InfoTab:CreateLabel("✓ Auto Click: 1-50 CPS")
+InfoTab:CreateLabel("✓ Adjustable Click Position")
+InfoTab:CreateLabel("✓ Red Cross Marker (show/hide)")
 InfoTab:CreateLabel("✓ Follow: Track any player")
 InfoTab:CreateLabel("✓ Aimbot: Auto-aim at nearest player")
 InfoTab:CreateLabel("✓ Simple: Easy to use interface")
@@ -466,7 +610,7 @@ InfoTab:CreateSection("📱 How to Use")
 
 InfoTab:CreateParagraph({
     Title = "Auto Click",
-    Content = "1. Go to Auto Click tab\n2. Adjust click speed (1-50 CPS)\n3. Toggle 'Enable Auto Click'\n\n📱 Mobile: Clicks above jump button (you can walk!)\n💻 PC: Clicks at screen center"
+    Content = "1. Go to Auto Click tab\n2. Adjust click speed (1-50 CPS)\n3. Use sliders to position the red cross marker\n4. Toggle marker visibility if needed\n5. Enable Auto Click\n\n🎯 The red cross shows exactly where clicks happen!"
 })
 
 InfoTab:CreateParagraph({
@@ -482,8 +626,8 @@ InfoTab:CreateParagraph({
 InfoTab:CreateSection("🐛 Troubleshooting")
 
 InfoTab:CreateParagraph({
-    Title = "If Something Doesn't Work",
-    Content = "• Make sure you entered the correct player name\n• Use 'Refresh Player List' to see current players\n• Press F9 to see console messages\n• Use 'STOP ALL FEATURES' to reset\n• Make sure the target player hasn't left"
+    Title = "If Marker is Not Visible",
+    Content = "• Make sure 'Show Red Cross Marker' is enabled\n• Try adjusting the position sliders\n• Use 'Reset Marker Position' button\n• Press F9 to check console for marker status\n• The marker appears as a red cross (+) on screen"
 })
 
 -- Initial notification
@@ -491,9 +635,10 @@ Notify("✓ Loaded", "Follow & Aimbot ready!")
 
 -- Console output
 print("=" .. string.rep("=", 50))
-print("FOLLOW & AIMBOT SCRIPT v1.0")
+print("FOLLOW & AIMBOT SCRIPT v1.1")
 print("=" .. string.rep("=", 50))
 print("Status: LOADED ✓")
 print("Player: " .. player.Name)
 print("Features: Auto Click, Follow, Aimbot")
+print("Marker: Creating red cross marker...")
 print("=" .. string.rep("=", 50))
