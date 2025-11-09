@@ -22,6 +22,12 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
 local Camera = Workspace.CurrentCamera
 
+-- Auto Click variables
+local autoClickEnabled = false
+local clickSpeed = 10
+local clickConnection = nil
+local lastClick = 0
+
 -- Follow variables
 local followEnabled = false
 local targetPlayerName = ""
@@ -41,6 +47,31 @@ local function Notify(title, content)
         Duration = 3,
         Image = 4483362458,
     })
+end
+
+-- Auto Click Function
+local function ExecuteClick()
+    local now = tick()
+    if now - lastClick < (1 / clickSpeed) then
+        return
+    end
+    lastClick = now
+    
+    spawn(function()
+        pcall(function()
+            local tool = character and character:FindFirstChildOfClass("Tool")
+            if tool and tool:FindFirstChild("Handle") then
+                tool:Activate()
+            else
+                local ViewportSize = Camera.ViewportSize
+                local center = Vector2.new(ViewportSize.X / 2, ViewportSize.Y / 2)
+                local VirtualInputManager = game:GetService("VirtualInputManager")
+                VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 0)
+                task.wait(0.01)
+                VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, false, game, 0)
+            end
+        end)
+    end)
 end
 
 -- Get player list
@@ -180,6 +211,46 @@ Players.PlayerRemoving:Connect(function(removedPlayer)
     end
 end)
 
+-- ==================== AUTO CLICK TAB ====================
+local ClickTab = Window:CreateTab("🖱️ Auto Click", 4483362458)
+
+ClickTab:CreateSection("⚙️ Click Configuration")
+
+ClickTab:CreateSlider({
+   Name = "Click Speed (CPS)",
+   Range = {1, 50},
+   Increment = 1,
+   Suffix = " CPS",
+   CurrentValue = 10,
+   Callback = function(Value)
+        clickSpeed = Value
+        Notify("Click Speed", tostring(Value) .. " CPS")
+   end,
+})
+
+ClickTab:CreateToggle({
+   Name = "Enable Auto Click",
+   CurrentValue = false,
+   Callback = function(State)
+        autoClickEnabled = State
+        
+        if State then
+            clickConnection = RunService.Heartbeat:Connect(function()
+                if autoClickEnabled then
+                    ExecuteClick()
+                end
+            end)
+            Notify("Auto Click", "ENABLED - " .. clickSpeed .. " CPS")
+        else
+            if clickConnection then
+                clickConnection:Disconnect()
+                clickConnection = nil
+            end
+            Notify("Auto Click", "DISABLED")
+        end
+   end,
+})
+
 -- ==================== FOLLOW TAB ====================
 local FollowTab = Window:CreateTab("🚶 Follow", 4483362458)
 
@@ -310,9 +381,14 @@ SettingsTab:CreateSection("🛑 Emergency Controls")
 SettingsTab:CreateButton({
    Name = "STOP ALL FEATURES",
    Callback = function()
+      autoClickEnabled = false
       followEnabled = false
       aimbotEnabled = false
       
+      if clickConnection then
+         clickConnection:Disconnect()
+         clickConnection = nil
+      end
       if followConnection then
          followConnection:Disconnect()
          followConnection = nil
@@ -332,9 +408,12 @@ SettingsTab:CreateButton({
    Name = "Show Status",
    Callback = function()
       print("========== CURRENT STATUS ==========")
+      print("Auto Click Enabled:", autoClickEnabled)
+      print("Click Speed:", clickSpeed, "CPS")
       print("Target Player:", targetPlayerName ~= "" and targetPlayerName or "NONE")
       print("Follow Enabled:", followEnabled)
       print("Aimbot Enabled:", aimbotEnabled)
+      print("Click Connection:", clickConnection and "Active" or "Inactive")
       print("Follow Connection:", followConnection and "Active" or "Inactive")
       print("Aimbot Connection:", aimbotConnection and "Active" or "Inactive")
       print("===================================")
@@ -355,17 +434,23 @@ InfoTab:CreateSection("📖 About")
 
 InfoTab:CreateParagraph({
     Title = "Follow & Aimbot Script v1.0",
-    Content = "A simple script with two powerful features: Follow players from behind and lock your camera onto the nearest player's head."
+    Content = "A simple script with three powerful features: Auto Click, Follow players from behind, and lock your camera onto the nearest player's head."
 })
 
 InfoTab:CreateSection("✨ Features")
 
+InfoTab:CreateLabel("✓ Auto Click: 1-50 CPS")
 InfoTab:CreateLabel("✓ Follow: Track any player")
 InfoTab:CreateLabel("✓ Aimbot: Auto-aim at nearest player")
 InfoTab:CreateLabel("✓ Simple: Easy to use interface")
 InfoTab:CreateLabel("✓ Safe: Emergency stop button")
 
 InfoTab:CreateSection("📱 How to Use")
+
+InfoTab:CreateParagraph({
+    Title = "Auto Click",
+    Content = "1. Go to Auto Click tab\n2. Adjust click speed (1-50 CPS)\n3. Toggle 'Enable Auto Click'\n\nWorks with tools and general clicking!"
+})
 
 InfoTab:CreateParagraph({
     Title = "Follow Mode",
@@ -393,5 +478,5 @@ print("FOLLOW & AIMBOT SCRIPT v1.0")
 print("=" .. string.rep("=", 50))
 print("Status: LOADED ✓")
 print("Player: " .. player.Name)
-print("Features: Follow, Aimbot")
+print("Features: Auto Click, Follow, Aimbot")
 print("=" .. string.rep("=", 50))
