@@ -1,5 +1,5 @@
 -- UNIVERSAL SCRIPT WITH FOLLOW, ORBIT & AIMBOT
--- Mobile Controls PRESERVED
+-- Mobile Controls PRESERVED + DEBUG MODE
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -32,7 +32,8 @@ local Settings = {
     TargetPlayer = nil,
     FollowDistance = 5,
     OrbitDistance = 10,
-    OrbitSpeed = 2
+    OrbitSpeed = 2,
+    DebugMode = true  -- デバッグモード追加
 }
 
 local clickConnection = nil
@@ -45,6 +46,13 @@ local orbitAngle = 0
 -- Check if mobile
 local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 
+-- Debug print function
+local function DebugPrint(...)
+    if Settings.DebugMode then
+        print("[DEBUG]", ...)
+    end
+end
+
 -- Notification
 local function Notify(title, msg)
     if Settings.Notifications then
@@ -54,6 +62,7 @@ local function Notify(title, msg)
             Duration = 3,
         })
     end
+    DebugPrint("Notification:", title, "-", msg)
 end
 
 -- IMPORTANT: Ensure mobile controls stay visible
@@ -124,16 +133,21 @@ local function GetPlayerList()
             table.insert(playerList, player.Name)
         end
     end
+    DebugPrint("Player list updated:", #playerList, "players found")
     return playerList
 end
 
 -- Get target player's character
 local function GetTargetCharacter()
-    if not Settings.TargetPlayer then return nil end
+    if not Settings.TargetPlayer then 
+        DebugPrint("No target player set")
+        return nil 
+    end
     local targetPlayer = Players:FindFirstChild(Settings.TargetPlayer)
     if targetPlayer and targetPlayer.Character then
         return targetPlayer.Character
     end
+    DebugPrint("Target player character not found:", Settings.TargetPlayer)
     return nil
 end
 
@@ -142,7 +156,10 @@ local function FollowTarget()
     local targetChar = GetTargetCharacter()
     local myChar = Player.Character
     
-    if not targetChar or not myChar then return end
+    if not targetChar or not myChar then 
+        DebugPrint("Follow: Missing character data")
+        return 
+    end
     
     local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
@@ -154,6 +171,8 @@ local function FollowTarget()
         local followPos = targetPos + (direction * Settings.FollowDistance)
         
         myHumanoid:MoveTo(followPos)
+    else
+        DebugPrint("Follow: Missing components")
     end
 end
 
@@ -162,7 +181,10 @@ local function OrbitTarget()
     local targetChar = GetTargetCharacter()
     local myChar = Player.Character
     
-    if not targetChar or not myChar then return end
+    if not targetChar or not myChar then 
+        DebugPrint("Orbit: Missing character data")
+        return 
+    end
     
     local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
@@ -178,6 +200,8 @@ local function OrbitTarget()
         local orbitPos = targetPos + Vector3.new(x, 0, z)
         
         myHumanoid:MoveTo(orbitPos)
+    else
+        DebugPrint("Orbit: Missing components")
     end
 end
 
@@ -185,12 +209,17 @@ end
 local function AimbotTarget()
     local targetChar = GetTargetCharacter()
     
-    if not targetChar then return end
+    if not targetChar then 
+        DebugPrint("Aimbot: No target character")
+        return 
+    end
     
     local targetHead = targetChar:FindFirstChild("Head")
     
     if targetHead then
         Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetHead.Position)
+    else
+        DebugPrint("Aimbot: Head not found")
     end
 end
 
@@ -207,6 +236,7 @@ ClickTab:CreateSlider({
    CurrentValue = 10,
    Callback = function(Value)
         Settings.ClickSpeed = Value
+        DebugPrint("Click speed changed to", Value)
         Notify("Click Speed", tostring(Value) .. " CPS")
    end,
 })
@@ -215,6 +245,7 @@ ClickTab:CreateToggle({
    Name = "Enable Auto Click",
    CurrentValue = false,
    Callback = function(State)
+        DebugPrint("Auto Click Toggle:", State)
         Settings.AutoClickActive = State
         
         if State then
@@ -246,6 +277,7 @@ local targetDropdown = FollowTab:CreateDropdown({
    CurrentOption = "None",
    Callback = function(Option)
         Settings.TargetPlayer = Option
+        DebugPrint("Target selected:", Option)
         Notify("Target", "Selected: " .. Option)
    end,
 })
@@ -268,27 +300,38 @@ FollowTab:CreateSlider({
    CurrentValue = 5,
    Callback = function(Value)
         Settings.FollowDistance = Value
+        DebugPrint("Follow distance:", Value)
    end,
 })
 
-FollowTab:CreateToggle({
+local FollowToggle = FollowTab:CreateToggle({
    Name = "Enable Follow",
    CurrentValue = false,
    Callback = function(State)
-        Settings.FollowEnabled = State
+        DebugPrint("========================================")
+        DebugPrint("FOLLOW TOGGLE PRESSED:", State)
+        DebugPrint("Target Player:", Settings.TargetPlayer or "NONE")
+        DebugPrint("========================================")
         
         if State then
-            if not Settings.TargetPlayer then
-                Notify("Error", "Please select a target first!")
+            if not Settings.TargetPlayer or Settings.TargetPlayer == "None" then
+                DebugPrint("ERROR: No target selected!")
+                Notify("⚠️ Error", "Please select a target first!")
+                Settings.FollowEnabled = false
                 return
             end
             
             -- Disable orbit if active
-            Settings.OrbitEnabled = false
-            if orbitConnection then
-                orbitConnection:Disconnect()
-                orbitConnection = nil
+            if Settings.OrbitEnabled then
+                DebugPrint("Disabling Orbit mode")
+                Settings.OrbitEnabled = false
+                if orbitConnection then
+                    orbitConnection:Disconnect()
+                    orbitConnection = nil
+                end
             end
+            
+            Settings.FollowEnabled = true
             
             followConnection = RunService.Heartbeat:Connect(function()
                 if Settings.FollowEnabled then
@@ -296,12 +339,15 @@ FollowTab:CreateToggle({
                 end
             end)
             
-            Notify("Follow", "Following " .. Settings.TargetPlayer)
+            DebugPrint("Follow mode STARTED for", Settings.TargetPlayer)
+            Notify("✓ Follow ENABLED", "Following " .. Settings.TargetPlayer)
         else
+            Settings.FollowEnabled = false
             if followConnection then
                 followConnection:Disconnect()
                 followConnection = nil
             end
+            DebugPrint("Follow mode STOPPED")
             Notify("Follow", "DISABLED")
         end
    end,
@@ -317,6 +363,7 @@ FollowTab:CreateSlider({
    CurrentValue = 10,
    Callback = function(Value)
         Settings.OrbitDistance = Value
+        DebugPrint("Orbit distance:", Value)
    end,
 })
 
@@ -328,41 +375,55 @@ FollowTab:CreateSlider({
    CurrentValue = 2,
    Callback = function(Value)
         Settings.OrbitSpeed = Value
+        DebugPrint("Orbit speed:", Value)
    end,
 })
 
-FollowTab:CreateToggle({
+local OrbitToggle = FollowTab:CreateToggle({
    Name = "Enable Orbit",
    CurrentValue = false,
    Callback = function(State)
-        Settings.OrbitEnabled = State
+        DebugPrint("========================================")
+        DebugPrint("ORBIT TOGGLE PRESSED:", State)
+        DebugPrint("Target Player:", Settings.TargetPlayer or "NONE")
+        DebugPrint("========================================")
         
         if State then
-            if not Settings.TargetPlayer then
-                Notify("Error", "Please select a target first!")
+            if not Settings.TargetPlayer or Settings.TargetPlayer == "None" then
+                DebugPrint("ERROR: No target selected!")
+                Notify("⚠️ Error", "Please select a target first!")
+                Settings.OrbitEnabled = false
                 return
             end
             
             -- Disable follow if active
-            Settings.FollowEnabled = false
-            if followConnection then
-                followConnection:Disconnect()
-                followConnection = nil
+            if Settings.FollowEnabled then
+                DebugPrint("Disabling Follow mode")
+                Settings.FollowEnabled = false
+                if followConnection then
+                    followConnection:Disconnect()
+                    followConnection = nil
+                end
             end
             
+            Settings.OrbitEnabled = true
             orbitAngle = 0
+            
             orbitConnection = RunService.Heartbeat:Connect(function()
                 if Settings.OrbitEnabled then
                     OrbitTarget()
                 end
             end)
             
-            Notify("Orbit", "Orbiting " .. Settings.TargetPlayer)
+            DebugPrint("Orbit mode STARTED for", Settings.TargetPlayer)
+            Notify("✓ Orbit ENABLED", "Orbiting " .. Settings.TargetPlayer)
         else
+            Settings.OrbitEnabled = false
             if orbitConnection then
                 orbitConnection:Disconnect()
                 orbitConnection = nil
             end
+            DebugPrint("Orbit mode STOPPED")
             Notify("Orbit", "DISABLED")
         end
    end,
@@ -378,17 +439,24 @@ AimbotTab:CreateParagraph({
     Content = "Aimbotは選択したプレイヤーの頭に常にカメラを向けます。Follow/Orbitと組み合わせて使用できます。"
 })
 
-AimbotTab:CreateToggle({
+local AimbotToggle = AimbotTab:CreateToggle({
    Name = "Enable Aimbot",
    CurrentValue = false,
    Callback = function(State)
-        Settings.AimbotEnabled = State
+        DebugPrint("========================================")
+        DebugPrint("AIMBOT TOGGLE PRESSED:", State)
+        DebugPrint("Target Player:", Settings.TargetPlayer or "NONE")
+        DebugPrint("========================================")
         
         if State then
-            if not Settings.TargetPlayer then
-                Notify("Error", "Please select a target first!")
+            if not Settings.TargetPlayer or Settings.TargetPlayer == "None" then
+                DebugPrint("ERROR: No target selected!")
+                Notify("⚠️ Error", "Please select a target first!")
+                Settings.AimbotEnabled = false
                 return
             end
+            
+            Settings.AimbotEnabled = true
             
             aimbotConnection = RunService.RenderStepped:Connect(function()
                 if Settings.AimbotEnabled then
@@ -396,12 +464,15 @@ AimbotTab:CreateToggle({
                 end
             end)
             
-            Notify("Aimbot", "Locked on " .. Settings.TargetPlayer)
+            DebugPrint("Aimbot STARTED for", Settings.TargetPlayer)
+            Notify("✓ Aimbot ENABLED", "Locked on " .. Settings.TargetPlayer)
         else
+            Settings.AimbotEnabled = false
             if aimbotConnection then
                 aimbotConnection:Disconnect()
                 aimbotConnection = nil
             end
+            DebugPrint("Aimbot STOPPED")
             Notify("Aimbot", "DISABLED")
         end
    end,
@@ -422,6 +493,34 @@ SettingsTab:CreateToggle({
    CurrentValue = true,
    Callback = function(State)
         Settings.Notifications = State
+        DebugPrint("Notifications:", State)
+   end,
+})
+
+SettingsTab:CreateSection("🐛 Debug Mode")
+
+SettingsTab:CreateToggle({
+   Name = "Enable Debug Mode",
+   CurrentValue = true,
+   Callback = function(State)
+        Settings.DebugMode = State
+        print("[DEBUG MODE]", State and "ENABLED" or "DISABLED")
+   end,
+})
+
+SettingsTab:CreateButton({
+   Name = "Show Current Status",
+   Callback = function()
+        print("========== CURRENT STATUS ==========")
+        print("Target Player:", Settings.TargetPlayer or "NONE")
+        print("Follow Enabled:", Settings.FollowEnabled)
+        print("Orbit Enabled:", Settings.OrbitEnabled)
+        print("Aimbot Enabled:", Settings.AimbotEnabled)
+        print("Follow Connection:", followConnection and "Active" or "Inactive")
+        print("Orbit Connection:", orbitConnection and "Active" or "Inactive")
+        print("Aimbot Connection:", aimbotConnection and "Active" or "Inactive")
+        print("===================================")
+        Notify("Status", "Check console (F9)")
    end,
 })
 
@@ -441,6 +540,7 @@ SettingsTab:CreateButton({
         if aimbotConnection then aimbotConnection:Disconnect() aimbotConnection = nil end
         
         PreserveMobileControls()
+        DebugPrint("ALL FEATURES STOPPED")
         Notify("STOPPED", "All features disabled!")
    end,
 })
@@ -470,7 +570,7 @@ local InfoTab = Window:CreateTab("ℹ️ Info", 4483362458)
 InfoTab:CreateSection("📖 About")
 
 InfoTab:CreateParagraph({
-    Title = "Universal Script Pro v1.0",
+    Title = "Universal Script Pro v1.1 (Debug)",
     Content = "Auto Click, Follow, Orbit, Aimbot機能を搭載した万能スクリプト。全デバイス対応でモバイルコントロールも保護されます。"
 })
 
@@ -481,7 +581,7 @@ InfoTab:CreateLabel("✓ Follow: プレイヤー尾行")
 InfoTab:CreateLabel("✓ Orbit: プレイヤー周回")
 InfoTab:CreateLabel("✓ Aimbot: 頭部ロックオン")
 InfoTab:CreateLabel("✓ Mobile: コントロール保護")
-InfoTab:CreateLabel("✓ Universal: 全ゲーム対応")
+InfoTab:CreateLabel("✓ Debug: デバッグモード搭載")
 
 InfoTab:CreateSection("📱 使い方")
 
@@ -493,6 +593,13 @@ InfoTab:CreateParagraph({
 InfoTab:CreateParagraph({
     Title = "Aimbot使用方法",
     Content = "1. Follow/Orbitでターゲット選択\n2. Aimbotタブを開く\n3. Enable AimbotをON\n4. カメラが常に頭部を追跡\n\n※Follow/Orbitと同時使用可能"
+})
+
+InfoTab:CreateSection("🐛 Troubleshooting")
+
+InfoTab:CreateParagraph({
+    Title = "動作しない場合",
+    Content = "1. F9キーでコンソールを開く\n2. Settingsタブで「Show Current Status」を押す\n3. デバッグメッセージを確認\n4. ターゲットが正しく選択されているか確認\n5. 「STOP ALL FEATURES」で全機能をリセット"
 })
 
 -- Initial setup
@@ -509,10 +616,17 @@ Notify("✓ Loaded", "All features ready!")
 
 -- Console output
 print("=" .. string.rep("=", 50))
-print("UNIVERSAL SCRIPT PRO V1.0")
+print("UNIVERSAL SCRIPT PRO V1.1 (DEBUG MODE)")
 print("=" .. string.rep("=", 50))
 print("Status: LOADED ✓")
 print("Player: " .. Player.Name)
 print("Device: " .. (isMobile and "Mobile (Touch)" or "PC (Keyboard/Mouse)"))
 print("Features: Auto Click, Follow, Orbit, Aimbot")
+print("Debug Mode: ENABLED (Press F9 to see logs)")
+print("=" .. string.rep("=", 50))
+print("")
+print("🐛 DEBUG TIPS:")
+print("- Use 'Show Current Status' button to check state")
+print("- All toggle actions will print to console")
+print("- Check for error messages in red")
 print("=" .. string.rep("=", 50))
