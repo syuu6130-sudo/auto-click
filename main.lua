@@ -15,12 +15,16 @@ local Window = Rayfield:CreateWindow({
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
 
 -- Variables
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
 local Camera = Workspace.CurrentCamera
+
+-- Check if mobile
+local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 
 -- Auto Click variables
 local autoClickEnabled = false
