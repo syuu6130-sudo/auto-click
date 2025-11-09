@@ -67,12 +67,17 @@ local function ExecuteClick()
             if tool and tool:FindFirstChild("Handle") then
                 tool:Activate()
             else
-                local ViewportSize = Camera.ViewportSize
-                local center = Vector2.new(ViewportSize.X / 2, ViewportSize.Y / 2)
                 local VirtualInputManager = game:GetService("VirtualInputManager")
-                VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 0)
+                local ViewportSize = Camera.ViewportSize
+                
+                -- ジャンプボタンの上（画面右下から少し上）
+                local clickX = ViewportSize.X - 100  -- 右から100px
+                local clickY = ViewportSize.Y - 200  -- 下から200px（ジャンプボタンの上）
+                
+                -- タッチイベントを送信
+                VirtualInputManager:SendTouchEvent(0, clickX, clickY)  -- タッチ開始
                 task.wait(0.01)
-                VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, false, game, 0)
+                VirtualInputManager:SendTouchEvent(1, clickX, clickY)  -- タッチ終了
             end
         end)
     end)
@@ -219,6 +224,13 @@ end)
 local ClickTab = Window:CreateTab("🖱️ Auto Click", 4483362458)
 
 ClickTab:CreateSection("⚙️ Click Configuration")
+
+if isMobile then
+    ClickTab:CreateLabel("📱 Mobile Mode: Clicking above jump button")
+    ClickTab:CreateLabel("✓ You can walk while auto-clicking!")
+else
+    ClickTab:CreateLabel("💻 PC Mode: Clicking at screen center")
+end
 
 ClickTab:CreateSlider({
    Name = "Click Speed (CPS)",
@@ -430,6 +442,7 @@ SettingsTab:CreateSection("👤 Player Information")
 SettingsTab:CreateLabel("Username: " .. player.Name)
 SettingsTab:CreateLabel("Display Name: " .. player.DisplayName)
 SettingsTab:CreateLabel("User ID: " .. tostring(player.UserId))
+SettingsTab:CreateLabel("Device: " .. (isMobile and "📱 Mobile" or "💻 PC"))
 
 -- ==================== INFO TAB ====================
 local InfoTab = Window:CreateTab("ℹ️ Info", 4483362458)
@@ -453,7 +466,7 @@ InfoTab:CreateSection("📱 How to Use")
 
 InfoTab:CreateParagraph({
     Title = "Auto Click",
-    Content = "1. Go to Auto Click tab\n2. Adjust click speed (1-50 CPS)\n3. Toggle 'Enable Auto Click'\n\nWorks with tools and general clicking!"
+    Content = "1. Go to Auto Click tab\n2. Adjust click speed (1-50 CPS)\n3. Toggle 'Enable Auto Click'\n\n📱 Mobile: Clicks above jump button (you can walk!)\n💻 PC: Clicks at screen center"
 })
 
 InfoTab:CreateParagraph({
