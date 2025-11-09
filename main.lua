@@ -1,12 +1,12 @@
--- UNIVERSAL AUTO CLICK SCRIPT
--- Mobile Controls PRESERVED - Joystick Won't Disappear
+-- UNIVERSAL SCRIPT WITH FOLLOW, ORBIT & AIMBOT
+-- Mobile Controls PRESERVED
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "🎮 Universal Auto Click",
+   Name = "🎮 Universal Script Pro",
    LoadingTitle = "Loading Universal Script...",
-   LoadingSubtitle = "Mobile Controls Protected",
+   LoadingSubtitle = "Follow, Orbit & Aimbot Ready",
    ConfigurationSaving = {Enabled = false},
    KeySystem = false,
 })
@@ -15,20 +15,32 @@ local Window = Rayfield:CreateWindow({
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local ContextActionService = game:GetService("ContextActionService")
+local Workspace = game:GetService("Workspace")
 
 -- Variables
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
+local Camera = Workspace.CurrentCamera
 
 local Settings = {
     ClickSpeed = 10,
     AutoClickActive = false,
-    Notifications = true
+    Notifications = true,
+    FollowEnabled = false,
+    OrbitEnabled = false,
+    AimbotEnabled = false,
+    TargetPlayer = nil,
+    FollowDistance = 5,
+    OrbitDistance = 10,
+    OrbitSpeed = 2
 }
 
 local clickConnection = nil
+local followConnection = nil
+local orbitConnection = nil
+local aimbotConnection = nil
 local lastClick = 0
+local orbitAngle = 0
 
 -- Check if mobile
 local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
@@ -47,26 +59,19 @@ end
 -- IMPORTANT: Ensure mobile controls stay visible
 local function PreserveMobileControls()
     if isMobile then
-        -- Make sure TouchGui and ControlsModule stay active
         pcall(function()
             local TouchGui = PlayerGui:FindFirstChild("TouchGui")
             if TouchGui then
                 TouchGui.Enabled = true
-                
-                -- Ensure joystick stays visible
                 local TouchControlFrame = TouchGui:FindFirstChild("TouchControlFrame")
                 if TouchControlFrame then
                     TouchControlFrame.Visible = true
-                    
-                    -- Thumbstick (movement joystick)
                     local Thumbstick = TouchControlFrame:FindFirstChild("ThumbstickFrame")
                     if Thumbstick then
                         Thumbstick.Visible = true
                         Thumbstick.Active = true
                     end
                 end
-                
-                -- Jump button
                 local JumpButton = TouchGui:FindFirstChild("JumpButton")
                 if JumpButton then
                     JumpButton.Visible = true
@@ -77,7 +82,7 @@ local function PreserveMobileControls()
     end
 end
 
--- Keep controls visible (run continuously)
+-- Keep controls visible
 if isMobile then
     spawn(function()
         while task.wait(0.5) do
@@ -86,7 +91,7 @@ if isMobile then
     end)
 end
 
--- Auto Click Function (doesn't interfere with touch controls)
+-- Auto Click Function
 local function ExecuteClick()
     local now = tick()
     if now - lastClick < (1 / Settings.ClickSpeed) then
@@ -94,19 +99,14 @@ local function ExecuteClick()
     end
     lastClick = now
     
-    -- Execute click without blocking touch input
     spawn(function()
         pcall(function()
-            -- Use tool activation instead of raw clicks
             local tool = Player.Character and Player.Character:FindFirstChildOfClass("Tool")
             if tool and tool:FindFirstChild("Handle") then
                 tool:Activate()
             else
-                -- Fallback: simulate click at center screen (won't block controls)
-                local ViewportSize = workspace.CurrentCamera.ViewportSize
+                local ViewportSize = Camera.ViewportSize
                 local center = Vector2.new(ViewportSize.X / 2, ViewportSize.Y / 2)
-                
-                -- This method doesn't capture input events
                 local VirtualInputManager = game:GetService("VirtualInputManager")
                 VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 0)
                 task.wait(0.01)
@@ -116,12 +116,90 @@ local function ExecuteClick()
     end)
 end
 
--- ==================== MAIN TAB ====================
-local MainTab = Window:CreateTab("🎮 Main", 4483362458)
+-- Get player list
+local function GetPlayerList()
+    local playerList = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= Player then
+            table.insert(playerList, player.Name)
+        end
+    end
+    return playerList
+end
 
-MainTab:CreateSection("⚙️ Click Configuration")
+-- Get target player's character
+local function GetTargetCharacter()
+    if not Settings.TargetPlayer then return nil end
+    local targetPlayer = Players:FindFirstChild(Settings.TargetPlayer)
+    if targetPlayer and targetPlayer.Character then
+        return targetPlayer.Character
+    end
+    return nil
+end
 
-MainTab:CreateSlider({
+-- Follow function (尾行)
+local function FollowTarget()
+    local targetChar = GetTargetCharacter()
+    local myChar = Player.Character
+    
+    if not targetChar or not myChar then return end
+    
+    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    local myHumanoid = myChar:FindFirstChild("Humanoid")
+    
+    if targetRoot and myRoot and myHumanoid then
+        local targetPos = targetRoot.Position
+        local direction = (myRoot.Position - targetPos).Unit
+        local followPos = targetPos + (direction * Settings.FollowDistance)
+        
+        myHumanoid:MoveTo(followPos)
+    end
+end
+
+-- Orbit function (周回)
+local function OrbitTarget()
+    local targetChar = GetTargetCharacter()
+    local myChar = Player.Character
+    
+    if not targetChar or not myChar then return end
+    
+    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    local myHumanoid = myChar:FindFirstChild("Humanoid")
+    
+    if targetRoot and myRoot and myHumanoid then
+        orbitAngle = orbitAngle + (Settings.OrbitSpeed * 0.05)
+        if orbitAngle > 360 then orbitAngle = 0 end
+        
+        local targetPos = targetRoot.Position
+        local x = math.cos(math.rad(orbitAngle)) * Settings.OrbitDistance
+        local z = math.sin(math.rad(orbitAngle)) * Settings.OrbitDistance
+        local orbitPos = targetPos + Vector3.new(x, 0, z)
+        
+        myHumanoid:MoveTo(orbitPos)
+    end
+end
+
+-- Aimbot function (標準固定)
+local function AimbotTarget()
+    local targetChar = GetTargetCharacter()
+    
+    if not targetChar then return end
+    
+    local targetHead = targetChar:FindFirstChild("Head")
+    
+    if targetHead then
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetHead.Position)
+    end
+end
+
+-- ==================== AUTO CLICK TAB ====================
+local ClickTab = Window:CreateTab("🖱️ Auto Click", 4483362458)
+
+ClickTab:CreateSection("⚙️ Click Configuration")
+
+ClickTab:CreateSlider({
    Name = "Click Speed (CPS)",
    Range = {1, 50},
    Increment = 1,
@@ -133,76 +211,206 @@ MainTab:CreateSlider({
    end,
 })
 
-MainTab:CreateSection("🖱️ Auto Click")
-
-MainTab:CreateToggle({
+ClickTab:CreateToggle({
    Name = "Enable Auto Click",
    CurrentValue = false,
    Callback = function(State)
         Settings.AutoClickActive = State
         
         if State then
-            -- Start auto clicking
             clickConnection = RunService.Heartbeat:Connect(function()
                 if Settings.AutoClickActive then
                     ExecuteClick()
                 end
             end)
-            
-            -- Ensure mobile controls stay
             PreserveMobileControls()
-            
             Notify("Auto Click", "ENABLED - " .. Settings.ClickSpeed .. " CPS")
         else
-            -- Stop auto clicking
             if clickConnection then
                 clickConnection:Disconnect()
                 clickConnection = nil
             end
-            
             Notify("Auto Click", "DISABLED")
         end
    end,
 })
 
-MainTab:CreateSection("📱 Mobile Controls Status")
+-- ==================== FOLLOW TAB ====================
+local FollowTab = Window:CreateTab("🚶 Follow/Orbit", 4483362458)
 
-if isMobile then
-    MainTab:CreateLabel("Device: 📱 Mobile/Tablet")
-    MainTab:CreateLabel("Joystick: ✓ Protected & Visible")
-    MainTab:CreateLabel("Jump Button: ✓ Protected & Visible")
-    MainTab:CreateLabel("Movement: ✓ Fully Functional")
-    
-    MainTab:CreateButton({
-       Name = "Force Restore Controls",
-       Callback = function()
-            PreserveMobileControls()
-            Notify("Controls", "Mobile controls restored!")
-       end,
-    })
-else
-    MainTab:CreateLabel("Device: 💻 PC/Desktop")
-    MainTab:CreateLabel("Keyboard: ✓ WASD Movement")
-    MainTab:CreateLabel("Mouse: ✓ Camera Control")
-end
+FollowTab:CreateSection("👤 Target Selection")
 
-MainTab:CreateSection("🛑 Emergency Stop")
-
-MainTab:CreateButton({
-   Name = "STOP All Auto Click",
-   Callback = function()
-        Settings.AutoClickActive = false
-        
-        if clickConnection then
-            clickConnection:Disconnect()
-            clickConnection = nil
-        end
-        
-        PreserveMobileControls()
-        
-        Notify("STOPPED", "Auto click disabled & controls restored")
+local targetDropdown = FollowTab:CreateDropdown({
+   Name = "Select Target Player",
+   Options = GetPlayerList(),
+   CurrentOption = "None",
+   Callback = function(Option)
+        Settings.TargetPlayer = Option
+        Notify("Target", "Selected: " .. Option)
    end,
 })
+
+FollowTab:CreateButton({
+   Name = "🔄 Refresh Player List",
+   Callback = function()
+        targetDropdown:Refresh(GetPlayerList(), true)
+        Notify("Refresh", "Player list updated!")
+   end,
+})
+
+FollowTab:CreateSection("🚶 Follow Mode (尾行)")
+
+FollowTab:CreateSlider({
+   Name = "Follow Distance",
+   Range = {1, 20},
+   Increment = 1,
+   Suffix = " studs",
+   CurrentValue = 5,
+   Callback = function(Value)
+        Settings.FollowDistance = Value
+   end,
+})
+
+FollowTab:CreateToggle({
+   Name = "Enable Follow",
+   CurrentValue = false,
+   Callback = function(State)
+        Settings.FollowEnabled = State
+        
+        if State then
+            if not Settings.TargetPlayer then
+                Notify("Error", "Please select a target first!")
+                return
+            end
+            
+            -- Disable orbit if active
+            Settings.OrbitEnabled = false
+            if orbitConnection then
+                orbitConnection:Disconnect()
+                orbitConnection = nil
+            end
+            
+            followConnection = RunService.Heartbeat:Connect(function()
+                if Settings.FollowEnabled then
+                    FollowTarget()
+                end
+            end)
+            
+            Notify("Follow", "Following " .. Settings.TargetPlayer)
+        else
+            if followConnection then
+                followConnection:Disconnect()
+                followConnection = nil
+            end
+            Notify("Follow", "DISABLED")
+        end
+   end,
+})
+
+FollowTab:CreateSection("🔄 Orbit Mode (周回)")
+
+FollowTab:CreateSlider({
+   Name = "Orbit Distance",
+   Range = {5, 30},
+   Increment = 1,
+   Suffix = " studs",
+   CurrentValue = 10,
+   Callback = function(Value)
+        Settings.OrbitDistance = Value
+   end,
+})
+
+FollowTab:CreateSlider({
+   Name = "Orbit Speed",
+   Range = {1, 10},
+   Increment = 1,
+   Suffix = "",
+   CurrentValue = 2,
+   Callback = function(Value)
+        Settings.OrbitSpeed = Value
+   end,
+})
+
+FollowTab:CreateToggle({
+   Name = "Enable Orbit",
+   CurrentValue = false,
+   Callback = function(State)
+        Settings.OrbitEnabled = State
+        
+        if State then
+            if not Settings.TargetPlayer then
+                Notify("Error", "Please select a target first!")
+                return
+            end
+            
+            -- Disable follow if active
+            Settings.FollowEnabled = false
+            if followConnection then
+                followConnection:Disconnect()
+                followConnection = nil
+            end
+            
+            orbitAngle = 0
+            orbitConnection = RunService.Heartbeat:Connect(function()
+                if Settings.OrbitEnabled then
+                    OrbitTarget()
+                end
+            end)
+            
+            Notify("Orbit", "Orbiting " .. Settings.TargetPlayer)
+        else
+            if orbitConnection then
+                orbitConnection:Disconnect()
+                orbitConnection = nil
+            end
+            Notify("Orbit", "DISABLED")
+        end
+   end,
+})
+
+-- ==================== AIMBOT TAB ====================
+local AimbotTab = Window:CreateTab("🎯 Aimbot", 4483362458)
+
+AimbotTab:CreateSection("🎯 Aimbot Configuration")
+
+AimbotTab:CreateParagraph({
+    Title = "Aimbot Info",
+    Content = "Aimbotは選択したプレイヤーの頭に常にカメラを向けます。Follow/Orbitと組み合わせて使用できます。"
+})
+
+AimbotTab:CreateToggle({
+   Name = "Enable Aimbot",
+   CurrentValue = false,
+   Callback = function(State)
+        Settings.AimbotEnabled = State
+        
+        if State then
+            if not Settings.TargetPlayer then
+                Notify("Error", "Please select a target first!")
+                return
+            end
+            
+            aimbotConnection = RunService.RenderStepped:Connect(function()
+                if Settings.AimbotEnabled then
+                    AimbotTarget()
+                end
+            end)
+            
+            Notify("Aimbot", "Locked on " .. Settings.TargetPlayer)
+        else
+            if aimbotConnection then
+                aimbotConnection:Disconnect()
+                aimbotConnection = nil
+            end
+            Notify("Aimbot", "DISABLED")
+        end
+   end,
+})
+
+AimbotTab:CreateSection("⚠️ Warning")
+
+AimbotTab:CreateLabel("⚠️ Aimbotは検出される可能性があります")
+AimbotTab:CreateLabel("⚠️ 責任を持って使用してください")
 
 -- ==================== SETTINGS TAB ====================
 local SettingsTab = Window:CreateTab("⚙️ Settings", 4483362458)
@@ -217,12 +425,35 @@ SettingsTab:CreateToggle({
    end,
 })
 
+SettingsTab:CreateSection("🛑 Emergency Stop")
+
+SettingsTab:CreateButton({
+   Name = "STOP ALL FEATURES",
+   Callback = function()
+        Settings.AutoClickActive = false
+        Settings.FollowEnabled = false
+        Settings.OrbitEnabled = false
+        Settings.AimbotEnabled = false
+        
+        if clickConnection then clickConnection:Disconnect() clickConnection = nil end
+        if followConnection then followConnection:Disconnect() followConnection = nil end
+        if orbitConnection then orbitConnection:Disconnect() orbitConnection = nil end
+        if aimbotConnection then aimbotConnection:Disconnect() aimbotConnection = nil end
+        
+        PreserveMobileControls()
+        Notify("STOPPED", "All features disabled!")
+   end,
+})
+
 SettingsTab:CreateSection("🎮 Control Protection")
 
 if isMobile then
-    SettingsTab:CreateParagraph({
-        Title = "Mobile Control Protection",
-        Content = "This script protects your mobile controls:\n\n✓ Joystick stays visible\n✓ Jump button stays visible\n✓ All touch controls work\n✓ Movement is preserved\n\nIf controls disappear, use 'Force Restore Controls' button!"
+    SettingsTab:CreateButton({
+       Name = "Force Restore Controls",
+       Callback = function()
+            PreserveMobileControls()
+            Notify("Controls", "Mobile controls restored!")
+       end,
     })
 end
 
@@ -239,82 +470,49 @@ local InfoTab = Window:CreateTab("ℹ️ Info", 4483362458)
 InfoTab:CreateSection("📖 About")
 
 InfoTab:CreateParagraph({
-    Title = "Universal Auto Click v5.0",
-    Content = "A universal auto-clicker designed to work on ALL devices while preserving native Roblox controls. Mobile joysticks and buttons are protected and will not disappear."
+    Title = "Universal Script Pro v1.0",
+    Content = "Auto Click, Follow, Orbit, Aimbot機能を搭載した万能スクリプト。全デバイス対応でモバイルコントロールも保護されます。"
 })
 
 InfoTab:CreateSection("✨ Features")
 
-InfoTab:CreateLabel("✓ Universal: Works on ALL games")
-InfoTab:CreateLabel("✓ Mobile: Joystick protected")
-InfoTab:CreateLabel("✓ PC: Full keyboard/mouse support")
-InfoTab:CreateLabel("✓ Safe: Doesn't block game controls")
-InfoTab:CreateLabel("✓ Adjustable: 1-50 CPS")
-InfoTab:CreateLabel("✓ Smart: Auto-detects device type")
+InfoTab:CreateLabel("✓ Auto Click: 1-50 CPS")
+InfoTab:CreateLabel("✓ Follow: プレイヤー尾行")
+InfoTab:CreateLabel("✓ Orbit: プレイヤー周回")
+InfoTab:CreateLabel("✓ Aimbot: 頭部ロックオン")
+InfoTab:CreateLabel("✓ Mobile: コントロール保護")
+InfoTab:CreateLabel("✓ Universal: 全ゲーム対応")
 
-InfoTab:CreateSection("📱 Mobile Users - READ THIS")
-
-InfoTab:CreateParagraph({
-    Title = "How to Use on Mobile",
-    Content = "1. Set your Click Speed (CPS)\n2. Toggle 'Enable Auto Click' ON\n3. Your JOYSTICK and BUTTONS stay visible!\n4. Move with joystick as normal\n5. Auto-clicking happens automatically\n\nIMPORTANT: If controls disappear, press 'Force Restore Controls' button!"
-})
-
-InfoTab:CreateSection("💻 PC Users - READ THIS")
+InfoTab:CreateSection("📱 使い方")
 
 InfoTab:CreateParagraph({
-    Title = "How to Use on PC",
-    Content = "1. Set your Click Speed (CPS)\n2. Toggle 'Enable Auto Click' ON\n3. Move with WASD as normal\n4. Use mouse for camera\n5. Auto-clicking happens automatically\n\nAll keyboard and mouse controls work normally!"
+    Title = "Follow/Orbit使用方法",
+    Content = "1. Follow/Orbitタブを開く\n2. ターゲットプレイヤーを選択\n3. FollowまたはOrbitをON\n4. 距離や速度を調整可能\n\nFollow: ターゲットを後ろから追跡\nOrbit: ターゲットの周りを円形に移動"
 })
-
-InfoTab:CreateSection("⚠️ Troubleshooting")
 
 InfoTab:CreateParagraph({
-    Title = "If Something Goes Wrong",
-    Content = "Mobile Controls Disappeared?\n→ Press 'Force Restore Controls'\n\nCan't Move?\n→ Press 'STOP All Auto Click'\n→ Then re-enable auto click\n\nNot Clicking?\n→ Check if CPS is set correctly\n→ Make sure toggle is ON\n\nStill Issues?\n→ Rejoin the game"
+    Title = "Aimbot使用方法",
+    Content = "1. Follow/Orbitでターゲット選択\n2. Aimbotタブを開く\n3. Enable AimbotをON\n4. カメラが常に頭部を追跡\n\n※Follow/Orbitと同時使用可能"
 })
-
-InfoTab:CreateSection("🎯 Compatibility")
-
-InfoTab:CreateLabel("Touch Devices: " .. (UserInputService.TouchEnabled and "✓ YES" or "✗ NO"))
-InfoTab:CreateLabel("Mouse Support: " .. (UserInputService.MouseEnabled and "✓ YES" or "✗ NO"))
-InfoTab:CreateLabel("Keyboard Support: " .. (UserInputService.KeyboardEnabled and "✓ YES" or "✗ NO"))
-InfoTab:CreateLabel("Gamepad Support: " .. (UserInputService.GamepadEnabled and "✓ YES" or "✗ NO"))
 
 -- Initial setup
 task.wait(1)
-
--- Ensure controls are visible on startup
 PreserveMobileControls()
 
--- Send welcome message
 if isMobile then
     Notify("📱 Mobile Device", "Controls protected & ready!")
 else
     Notify("💻 PC Device", "Ready to use!")
 end
 
-Notify("✓ Loaded", "Set CPS and enable auto click!")
+Notify("✓ Loaded", "All features ready!")
 
 -- Console output
 print("=" .. string.rep("=", 50))
-print("UNIVERSAL AUTO CLICK V5.0")
+print("UNIVERSAL SCRIPT PRO V1.0")
 print("=" .. string.rep("=", 50))
 print("Status: LOADED ✓")
 print("Player: " .. Player.Name)
 print("Device: " .. (isMobile and "Mobile (Touch)" or "PC (Keyboard/Mouse)"))
-print("Controls: " .. (isMobile and "Joystick PROTECTED" or "WASD/Mouse ACTIVE"))
-print("=" .. string.rep("=", 50))
-print("")
-if isMobile then
-    print("MOBILE USERS:")
-    print("• Your joystick WILL stay visible")
-    print("• Jump button WILL stay visible")
-    print("• All controls protected by script")
-    print("• Use 'Force Restore' if needed")
-else
-    print("PC USERS:")
-    print("• WASD movement works")
-    print("• Mouse controls work")
-    print("• All inputs preserved")
-end
+print("Features: Auto Click, Follow, Orbit, Aimbot")
 print("=" .. string.rep("=", 50))
